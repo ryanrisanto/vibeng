@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { users } from "../db/schema";
+import { users, sessions } from "../db/schema";
 import { eq } from "drizzle-orm";
 
 export interface RegisterPayload {
@@ -34,4 +34,42 @@ export async function registerUser(payload: RegisterPayload): Promise<string> {
   });
 
   return "OK";
+}
+
+export interface UserProfile {
+  id: number;
+  name: string;
+  email: string;
+  created_at: Date | null;
+}
+
+export async function getCurrentUser(token: string): Promise<UserProfile> {
+  const [result] = await db
+    .select({
+      id: users.id,
+      name: users.name,
+      email: users.email,
+      createdAt: users.createdAt,
+      expiresAt: sessions.expiresAt,
+    })
+    .from(sessions)
+    .innerJoin(users, eq(sessions.userId, users.id))
+    .where(eq(sessions.sessionToken, token))
+    .limit(1);
+
+  if (!result) {
+    throw new Error("Unauthorized");
+  }
+
+  // Check if session has expired
+  if (result.expiresAt < new Date()) {
+    throw new Error("Unauthorized");
+  }
+
+  return {
+    id: result.id,
+    name: result.name,
+    email: result.email,
+    created_at: result.createdAt,
+  };
 }

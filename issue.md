@@ -1,118 +1,87 @@
-# Implementasi Fitur Login User & Manajemen Sesi
+# Implementasi Fitur Get Current User
 
 ## 🎯 Tujuan
-Tugas ini bertujuan untuk membangun backend API fitur login pengguna. Fokus utama mencakup pembuatan tabel `sessions` di database untuk menyimpan sesi aktif, pembuatan _service layer_ untuk memverifikasi kredensial pengguna (email & password), pembuatan token _session_ (UUID), serta pembuatan endpoint API `/api/login` menggunakan framework **ElysiaJS**.
+Tugas ini bertujuan untuk membangun backend API guna mendapatkan data profil pengguna yang sedang login saat ini. Fokus utama mencakup pembuatan endpoint `GET /api/users/current`, ekstraksi token dari _header_ `Authorization`, dan validasi token tersebut ke dalam tabel `sessions` sebelum mengembalikan data dari tabel `users`.
 
 ---
 
-## 1. 🗄️ Skema Database (Drizzle ORM)
-Kita membutuhkan tabel baru bernama `sessions` untuk melacak status login pengguna. Berdasarkan konfigurasi proyek yang menggunakan **Drizzle ORM**, berikut spesifikasi tabelnya:
+## 1. 🌐 Spesifikasi API Endpoint
 
-**Nama Tabel:** `sessions`
+- **URL:** `/api/users/current`
+- **Method:** `GET`
 
-| Kolom | Tipe Data | Modifiers | Deskripsi |
-| :--- | :--- | :--- | :--- |
-| `user_id` | `integer` | Not Null, Foreign Key | Merujuk (FK) ke kolom `id` di tabel `users`. |
-| `session_token` | `varchar(255)` | Not Null, Unique | Menyimpan UUID unik sebagai penanda sesi pengguna yang aktif. |
-| `expires_at` | `timestamp` | Not Null | Waktu kedaluwarsa sesi tersebut (misal: waktu saat login ditambah beberapa hari). |
-| `created_at` | `timestamp` | Default: `now()` | Waktu saat sesi pertama kali dibuat (waktu login). |
-
-**Tugas di langkah ini:**
-1. Buka file skema database (misal: `src/db/schema.ts`).
-2. Definisikan tabel `sessions` menggunakan syntax Drizzle (pastikan untuk menyertakan referensi _foreign key_ ke tabel `users`).
-3. Jalankan perintah Drizzle (misal: `bunx drizzle-kit push`) untuk melakukan sinkronisasi tabel baru tersebut ke dalam database MySQL.
-
----
-
-## 2. 🌐 Spesifikasi API Endpoint
-Endpoint ini bertugas menerima input kredensial, memvalidasinya, dan jika sukses, mengembalikan token sesi (berupa UUID).
-
-- **URL:** `/api/login`
-- **Method:** `POST`
-- **Content-Type:** `application/json`
-
-### Request Body (Payload)
-Gunakan validasi bawaan ElysiaJS (TypeBox melalui `t.Object`) untuk memastikan *body request* memiliki struktur yang tepat.
-
+### Headers (Wajib)
+Endpoint ini dilindungi dan membutuhkan token _session_ (UUID) yang disisipkan di *header* `Authorization` menggunakan format *Bearer*.
 ```json
 {
-    "email": "ryan@localhost",
-    "password": "rahasia"
+    "Authorization": "Bearer <token_uuid_dari_proses_login>"
 }
 ```
-*Syarat Validasi Elysia:* Kedua _field_ (`email` dan `password`) bertipe String dan wajib disertakan.
 
 ### Response Body - Berhasil (200 OK)
-Dikembalikan jika email yang diinput terdaftar di sistem dan password cocok dengan hash yang tersimpan di database.
+Jika token valid, tidak kedaluwarsa, dan pengguna ditemukan di database, maka data pengguna akan dikembalikan (tanpa mengembalikan kata sandi).
 ```json
 {
-    "data": "123e4567-e89b-12d3-a456-426614174000"
+    "data": {
+        "id": 1,
+        "name": "ryan",
+        "email": "ryan@localhost",
+        "created_at": "2026-07-13T12:17:41.000Z"
+    }
 }
 ```
-*(Catatan: Nilai pada properti `data` adalah *string* dari UUID unik yang baru saja di-generate)*
 
-### Response Body - Gagal (400 Bad Request / 401 Unauthorized)
-Dikembalikan jika kredensial salah. Demi alasan keamanan, pesan kesalahan tidak boleh memberi tahu *client* secara spesifik apakah email-nya yang tidak ada atau password-nya yang salah.
+### Response Body - Gagal (401 Unauthorized)
+Jika token tidak disertakan, format salah, token tidak ditemukan di tabel `sessions`, atau token sudah kedaluwarsa (berdasarkan `expires_at`). Demi keamanan, pesan *error* harus diseragamkan.
 ```json
 {
-    "error": "Email atau password salah atau user tidak terdaftar"
+    "error": "Unauthorized"
 }
 ```
 
 ---
 
-## 3. 📂 Struktur Folder dan Penamaan File
-Lanjutkan pendekatan arsitektur yang sudah ada dengan pemisahan antara *Route* dan *Service* di direktori `src`:
-
+## 2. 📂 Struktur Folder dan Penamaan File
+Sesuai standar yang digunakan:
 1. **Routing Layer (`src/routes/`):**
-   - **Saran Penamaan File:** `auth-route.ts` atau buat _group_ rute baru bernama `login-route.ts`.
-   - **Tanggung Jawab:** Menerima _HTTP request_, melakukan validasi data masuk (payload login), memanggil fungsi di _service layer_, menangani _error handling_, serta memformat dan mengembalikan _HTTP response_.
-
+   - **Saran Penamaan:** Tambahkan pada `users-route.ts` (karena URL-nya `/api/users/current`) atau `auth-route.ts`.
+   - **Tanggung Jawab:** Mengekstrak *header* `Authorization`, memisahkan string "Bearer " dan nilai token, melempar _error_ jika header kosong, memanggil fungsi dari _service_, dan memformat pengembalian respons API.
 2. **Service Layer (`src/services/`):**
-   - **Saran Penamaan File:** `auth-service.ts` atau `login-service.ts`.
-   - **Tanggung Jawab:** Memproses murni logika bisnis (tidak tahu-menahu tentang urusan HTTP). Hal yang dilakukan antara lain: mencari data _user_, membandingkan (_verify_) kecocokan *password*, membuat UUID untuk token, menghitung waktu _expired_, dan menyimpannya ke tabel `sessions`.
+   - **Saran Penamaan:** Tambahkan pada `users-service.ts` atau `auth-service.ts`.
+   - **Tanggung Jawab:** Melakukan validasi database. Mencari token di tabel `sessions`, memverifikasi bahwa token belum kedaluwarsa, melakukan _join_ atau _query_ lanjutan ke tabel `users` untuk mengambil informasi pengguna (`id`, `name`, `email`, dan `createdAt`), lalu mengembalikannya ke layer _route_.
 
 ---
 
-## 4. 🛠️ Tahapan Implementasi Detail (Step-by-Step)
+## 3. 🛠️ Tahapan Implementasi Detail (Step-by-Step)
 
-Untuk mempermudah pelaksanaan, jalankan implementasi dengan urutan berikut ini:
+Ikuti langkah-langkah di bawah ini untuk mempermudah implementasi fitur:
 
-### Step 1: Pembaruan Skema Database & Migrasi
-- Buka `src/db/schema.ts` dan tambahkan definisi untuk tabel `sessions`. 
-- Gunakan fitur _Foreign Key_ Drizzle (misal: `.references(() => users.id)`) untuk menghubungkan kolom `user_id` ke tabel `users`.
-- Eksekusi *push/migrate* skema database agar tabel baru langsung terbuat secara fisik di MySQL.
+### Step 1: Implementasi Service Layer
+- Buka file _service_ yang relevan (misal `src/services/users-service.ts`).
+- Buat dan ekspor fungsi asinkron bernama `getCurrentUser(token: string)`.
+- **Logika di dalam fungsi `getCurrentUser`:**
+  1. Lakukan *query* ke database untuk mencari sesi di tabel `sessions` berdasarkan kolom `session_token` yang nilainya sama dengan argumen `token`.
+  2. Jika data sesi tidak ditemukan, segera lempar _error_ dengan pesan `Unauthorized`.
+  3. Lakukan **Validasi Waktu (Expiration):** Cek apakah waktu saat ini (`new Date()`) sudah melewati nilai waktu pada kolom `expires_at` dari sesi tersebut. Jika iya, lempar _error_ `Unauthorized`. *(Opsional: Sesi yang kedaluwarsa dapat dihapus juga).*
+  4. Jika sesi valid, ambil nilai `user_id` dari sesi tersebut dan lakukan *query* _select_ ke tabel `users` untuk menemukan data lengkap dari _user_.
+  5. Jika *user* valid, kembalikan objek data yang memuat `id`, `name`, `email`, dan `createdAt`. **PENTING:** Pastikan kolom `password` sama sekali tidak diikutkan ke dalam balasan pengembalian (_return_).
 
-### Step 2: Implementasi Service Layer
-- Buat file service baru (misalnya `src/services/auth-service.ts`).
-- Buat dan *export* fungsi `loginUser(payload)` dengan tahapan:
-  1. Cari keberadaan user di tabel `users` berdasarkan input `payload.email`.
-  2. Jika fungsi ORM mengembalikan nilai _null_ (user tidak ditemukan), *throw error* dengan pesan "Email atau password salah atau user tidak terdaftar".
-  3. Lakukan pengecekan *password* menggunakan library pengecek hash bawaan (contoh di Bun: `await Bun.password.verify(payload.password, user.password)`).
-  4. Jika hasil pengecekan password me-return `false`, lempar _error_ persis seperti pada poin ke-2.
-  5. Jika pengecekan sukses, *generate* token acak menggunakan metode bawaan runtime (misal `crypto.randomUUID()`).
-  6. Kalkulasi waktu kedaluwarsa token (`expires_at`), contoh: waktu saat login + 7 hari.
-  7. Lakukan proses *insert* data ( `user_id`, `session_token`, `expires_at` ) ke dalam tabel `sessions`.
-  8. Kembalikan *string* `session_token` tersebut.
+### Step 2: Implementasi Route Layer
+- Buka file _route_ yang relevan (misal `src/routes/users-route.ts`).
+- Definisikan *endpoint* baru: `.get('/api/users/current', ...)`
+- **Di dalam *handler* tersebut:**
+  1. Dapatkan nilai _header_ `Authorization`. (Pada Elysia, Anda dapat memanfaatkan destructuring `headers` pada parameter *handler*).
+  2. Lakukan pengecekan: Jika _header_ tersebut *undefined*, kosong, atau tidak diawali dengan string "Bearer ", ubah HTTP status (`set.status = 401`) dan langsung _return_ `{"error": "Unauthorized"}`.
+  3. Jika terdeteksi, ekstrak token asli dengan membuang prefix "Bearer ".
+  4. Bungkus pemanggilan *service* dalam blok `try...catch`. Di dalam `try`, panggil `await getCurrentUser(token)` yang dibuat di Step 1.
+  5. Jika sukses, kembalikan objek data berformat `{"data": hasil_data_user}`.
+  6. Di dalam `catch (error)`, set HTTP Status ke `401` dan pastikan membalas respons konstan `{"error": "Unauthorized"}`.
 
-### Step 3: Implementasi Route Layer
-- Buat file *route* (misalnya `src/routes/auth-route.ts`).
-- Buat rute baru dengan Elysia: `.post('/api/login', ...)`
-- Pasang validasi _body request_ menggunakan `t.Object({ email: t.String(), password: t.String() })`.
-- Dalam *handler* API tersebut, jalankan fungsi `loginUser()` dari _service_.
-- Jika menemui *error* (pada blok _catch_), ubah HTTP Status Code menjadi `400` atau `401`, dan kirimkan respons `{"error": "Pesan dari service..."}`.
-- Jika berhasil (tanpa error), kirimkan respons JSON berformat `{"data": "token_string_uuid"}`.
-
-### Step 4: Menghubungkan Rute ke Aplikasi Utama
-- Buka file *entry point* (misal `src/index.ts`).
-- Import *route* login yang baru dibuat.
-- Sambungkan _route_ tersebut menggunakan *method* `.use()` pada *instance* utama aplikasi ElysiaJS.
-
-### Step 5: Tahap Pengujian (Testing)
-1. Pastikan server lokal berjalan (`bun run dev`).
-2. **Uji Kasus Berhasil:** Gunakan REST Client/Postman/curl untuk me-Request `/api/login` menggunakan email & password akun yang sudah terdaftar. 
-   - *Verifikasi:* Cek apakah _response_ berisi properti `data` (token UUID). Periksa ke database (tabel `sessions`) apakah _row_ baru benar-benar tersimpan dengan nilai yang sesuai.
-3. **Uji Kasus Gagal (1):** Tembak endpoint dengan **email sembarang** yang belum ada di tabel `users`.
-   - *Verifikasi:* Harus memunculkan *error* sesuai standar dan Status `400/401`.
-4. **Uji Kasus Gagal (2):** Tembak endpoint dengan email yang terdaftar namun berikan **password yang salah**.
-   - *Verifikasi:* Harus memunculkan respon *error* yang persis sama dengan kasus gagal (1) untuk menghindari *user enumeration attacks*.
+### Step 3: Pengujian (Testing)
+1. **Persiapan:** Pastikan server berjalan dan jalankan API `/api/login` (POST) terlebih dahulu untuk menerima string UUID _session token_ baru yang berstatus aktif.
+2. **Uji Kasus Berhasil:** Gunakan `curl` atau _tools_ semacam Postman. Buat HTTP GET request ke `/api/users/current`, dan sertakan *header* di pengaturan request: `Authorization: Bearer <TOKEN_UUID>`. 
+   - _Ekspektasi:_ Server membalas (200 OK) berisi objek properti identitas dari *user*.
+3. **Uji Kasus Gagal 1 (Tanpa Header):** Lakukan pemanggilan *request* tanpa mencantumkan header `Authorization` sama sekali.
+   - _Ekspektasi:_ `{"error": "Unauthorized"}` dengan HTTP Status 401.
+4. **Uji Kasus Gagal 2 (Token Invalid):** Lakukan *request* dengan menyisipkan header `Authorization: Bearer nilai_token_sembarang_yang_tidak_ada`.
+   - _Ekspektasi:_ `{"error": "Unauthorized"}` dengan HTTP Status 401.
