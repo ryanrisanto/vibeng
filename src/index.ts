@@ -2,9 +2,11 @@ import { Elysia } from "elysia";
 import { db } from "./db";
 import { users } from "./db/schema";
 import { usersRoute } from "./routes/users-route";
+import { authRoute } from "./routes/auth-route";
 
 const app = new Elysia()
   .use(usersRoute)
+  .use(authRoute)
   .get("/", () => ({
     status: "ok",
     message: "Server is running smoothly",
