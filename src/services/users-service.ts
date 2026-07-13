@@ -73,3 +73,8 @@ export async function getCurrentUser(token: string): Promise<UserProfile> {
     created_at: result.createdAt,
   };
 }
+
+export async function logoutUser(token: string): Promise<string> {
+  await db.delete(sessions).where(eq(sessions.sessionToken, token));
+  return "OK";
+}
