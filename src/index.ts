@@ -4,7 +4,7 @@ import { users } from "./db/schema";
 import { usersRoute } from "./routes/users-route";
 import { authRoute } from "./routes/auth-route";
 
-const app = new Elysia()
+export const app = new Elysia()
   .use(usersRoute)
   .use(authRoute)
   .get("/", () => ({
