@@ -17,6 +17,14 @@ export const authRoute = new Elysia().post(
       email: t.String({ minLength: 1 }),
       password: t.String({ minLength: 1 }),
     }),
+    response: {
+      200: t.Object({
+        data: t.String({ description: "Session token" }),
+      }),
+      400: t.Object({
+        error: t.String({ description: "Error message details" }),
+      }),
+    },
     detail: {
       tags: ["Auth"],
       summary: "Login User",

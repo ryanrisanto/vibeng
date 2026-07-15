@@ -1,4 +1,4 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { swagger } from "@elysiajs/swagger";
 import { db } from "./db";
 import { users } from "./db/schema";
@@ -42,6 +42,12 @@ export const app = new Elysia()
       message: "Server is running smoothly",
     }),
     {
+      response: {
+        200: t.Object({
+          status: t.String({ description: "Operational status" }),
+          message: t.String({ description: "Success message info" }),
+        }),
+      },
       detail: {
         tags: ["General"],
         summary: "Server Health Check",
@@ -67,6 +73,25 @@ export const app = new Elysia()
       }
     },
     {
+      response: {
+        200: t.Object({
+          success: t.Boolean({ description: "Success state" }),
+          data: t.Array(
+            t.Object({
+              id: t.Numeric({ description: "User ID" }),
+              name: t.String({ description: "User full name" }),
+              email: t.String({ description: "User email address" }),
+              password: t.String({ description: "Hashed password" }),
+              createdAt: t.Any({ description: "User creation date" }),
+            })
+          ),
+        }),
+        500: t.Object({
+          success: t.Boolean({ description: "Success state" }),
+          message: t.String({ description: "Failure description" }),
+          error: t.String({ description: "Error stack or details" }),
+        }),
+      },
       detail: {
         tags: ["Users"],
         summary: "Get All Users (Internal)",

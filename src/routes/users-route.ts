@@ -23,6 +23,17 @@ export const usersRoute = new Elysia()
         email: t.String({ maxLength: 255 }),
         password: t.String({ minLength: 1, maxLength: 255 }),
       }),
+      response: {
+        200: t.Object({
+          data: t.String({ description: "Success response value" }),
+        }),
+        400: t.Object({
+          error: t.String({ description: "Email already registered" }),
+        }),
+        500: t.Object({
+          error: t.String({ description: "Internal server error" }),
+        }),
+      },
       detail: {
         tags: ["Users"],
         summary: "Register User",
@@ -49,6 +60,19 @@ export const usersRoute = new Elysia()
       }
     },
     {
+      response: {
+        200: t.Object({
+          data: t.Object({
+            id: t.Numeric({ description: "User ID" }),
+            name: t.String({ description: "User full name" }),
+            email: t.String({ description: "User email address" }),
+            created_at: t.Any({ description: "User creation date" }),
+          }),
+        }),
+        401: t.Object({
+          error: t.String({ description: "Unauthorized access" }),
+        }),
+      },
       detail: {
         tags: ["Users"],
         summary: "Get Current User Profile",
@@ -76,6 +100,14 @@ export const usersRoute = new Elysia()
       }
     },
     {
+      response: {
+        200: t.Object({
+          data: t.String({ description: "Success response value" }),
+        }),
+        401: t.Object({
+          error: t.String({ description: "Unauthorized access" }),
+        }),
+      },
       detail: {
         tags: ["Users"],
         summary: "Logout User",
